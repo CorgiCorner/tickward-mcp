@@ -75,7 +75,47 @@ describe("OAuth props", () => {
     })
   })
 
-  it("returns a client error instead of throwing when OAuth client metadata fails", async () => {
+  it("registers trusted ChatGPT CIMD clients before starting first-party authorization", async () => {
+    const values = new Map<string, string>()
+    const oauthKv = {
+      get: (key: string) => Promise.resolve(values.get(key) ?? null),
+      put: (key: string, value: string) => {
+        values.set(key, value)
+        return Promise.resolve()
+      },
+    } as unknown as KVNamespace
+    const helpers = {
+      lookupClient: (clientId: string) => Promise.resolve(JSON.parse(values.get(`client:${clientId}`) ?? "null")),
+      parseAuthRequest: async (request: Request) => {
+        const url = new URL(request.url)
+        const clientId = url.searchParams.get("client_id") ?? ""
+        if (!values.has(`client:${clientId}`)) {
+          throw new Error("Invalid client. The clientId provided does not match to this client.")
+        }
+        return {
+          clientId,
+          scope: ["projects:read"],
+        }
+      },
+    } as never
+
+    const res = await startFirstPartyAuthorization({
+      config: { apiBaseUrl: "https://tickward.test/api/v1", appBaseUrl: "https://tickward.test" },
+      helpers,
+      oauthKv,
+      request: new Request(
+        "https://mcp.tickward.test/authorize?response_type=code&client_id=https%3A%2F%2Fchatgpt.com%2Foauth%2FLyw_TkTBjpO1%2Fclient.json%3Ftoken_endpoint_auth_method%3Dnone&redirect_uri=https%3A%2F%2Fchatgpt.com%2Fconnector%2Foauth%2FLyw_TkTBjpO1&scope=projects%3Aread&code_challenge=Jor6uSaFDcvMST0Rsu_R7XRiS3Hd-EIgGWKl8EhKfoY&code_challenge_method=S256",
+      ),
+    })
+
+    expect(res.status).toBe(302)
+    expect(
+      values.get("client:https://chatgpt.com/oauth/Lyw_TkTBjpO1/client.json?token_endpoint_auth_method=none"),
+    ).toContain('"clientName":"ChatGPT"')
+  })
+
+  it("rejects ChatGPT CIMD clients when the redirect id does not match", async () => {
+    const values = new Map<string, string>()
     const helpers = {
       lookupClient: () => Promise.resolve(null),
       parseAuthRequest: () =>
@@ -85,13 +125,20 @@ describe("OAuth props", () => {
     const res = await startFirstPartyAuthorization({
       config: { apiBaseUrl: "https://tickward.test/api/v1", appBaseUrl: "https://tickward.test" },
       helpers,
-      oauthKv: {} as KVNamespace,
+      oauthKv: {
+        get: (key: string) => Promise.resolve(values.get(key) ?? null),
+        put: (key: string, value: string) => {
+          values.set(key, value)
+          return Promise.resolve()
+        },
+      } as unknown as KVNamespace,
       request: new Request(
-        "https://mcp.tickward.test/authorize?client_id=https%3A%2F%2Fchatgpt.com%2Foauth%2Fexample%2Fclient.json&scope=projects%3Aread&redirect_uri=https%3A%2F%2Fchatgpt.com%2Fconnector%2Foauth%2Fexample",
+        "https://mcp.tickward.test/authorize?response_type=code&client_id=https%3A%2F%2Fchatgpt.com%2Foauth%2FLyw_TkTBjpO1%2Fclient.json%3Ftoken_endpoint_auth_method%3Dnone&redirect_uri=https%3A%2F%2Fchatgpt.com%2Fconnector%2Foauth%2Fwrong&scope=projects%3Aread&code_challenge=Jor6uSaFDcvMST0Rsu_R7XRiS3Hd-EIgGWKl8EhKfoY&code_challenge_method=S256",
       ),
     })
 
     await expect(res.text()).resolves.toContain("Use Dynamic Client Registration")
     expect(res.status).toBe(400)
+    expect(values.size).toBe(0)
   })
 })

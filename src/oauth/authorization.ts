@@ -1,4 +1,4 @@
-import type { AuthRequest, OAuthHelpers } from "@cloudflare/workers-oauth-provider"
+import type { AuthRequest, ClientInfo, OAuthHelpers } from "@cloudflare/workers-oauth-provider"
 
 import { exchangeMcpAuthorizationGrant, type McpAuthorizationExchange } from "../api/client.js"
 import type { WorkerConfig } from "../config/urls.js"
@@ -30,10 +30,11 @@ type StoredAuthorizationHandoff = {
 
 const HANDOFF_PREFIX = "mcp-oauth-handoff:"
 const HANDOFF_TTL_SECONDS = 10 * 60
+const TRUSTED_CIMD_CLIENT_TTL_SECONDS = 90 * 24 * 60 * 60
 const OAUTH_SCOPE_SET = new Set<string>(OAUTH_SCOPES)
 
 export async function startFirstPartyAuthorization(context: AuthorizeContext) {
-  const oauthRequest = await parseAuthRequestOrError(context.helpers, context.request)
+  const oauthRequest = await parseAuthRequestOrError(context.helpers, context.request, context.oauthKv)
   if (oauthRequest instanceof Response) return oauthRequest
 
   const client = await lookupClientOrError(context.helpers, oauthRequest.clientId)
@@ -88,7 +89,7 @@ export async function completeFirstPartyAuthorization(context: AuthorizeContext)
   }
 
   const reconstructed = new Request(`${callbackUrl.origin}/authorize${stored.search}`, context.request)
-  const oauthRequest = await parseAuthRequestOrError(context.helpers, reconstructed)
+  const oauthRequest = await parseAuthRequestOrError(context.helpers, reconstructed, context.oauthKv)
   if (oauthRequest instanceof Response) return oauthRequest
 
   const client = await lookupClientOrError(context.helpers, oauthRequest.clientId)
@@ -170,12 +171,23 @@ function isOAuthScope(value: unknown): value is OAuthScope {
   return typeof value === "string" && OAUTH_SCOPE_SET.has(value)
 }
 
-async function parseAuthRequestOrError(helpers: OAuthHelpers, request: Request) {
+async function parseAuthRequestOrError(helpers: OAuthHelpers, request: Request, oauthKv: KVNamespace) {
+  let error: unknown
   try {
     return await helpers.parseAuthRequest(request)
-  } catch (error) {
-    return htmlResponse(renderAuthorizeError(authRequestErrorMessage(error)), { status: 400 })
+  } catch (caught) {
+    error = caught
   }
+
+  if (isInvalidClientError(error) && (await registerTrustedCimdClient(oauthKv, request))) {
+    try {
+      return await helpers.parseAuthRequest(request)
+    } catch (caught) {
+      error = caught
+    }
+  }
+
+  return htmlResponse(renderAuthorizeError(authRequestErrorMessage(error)), { status: 400 })
 }
 
 async function lookupClientOrError(helpers: OAuthHelpers, clientId: string) {
@@ -194,6 +206,70 @@ function authRequestErrorMessage(error: unknown) {
   if (/redirect URI/i.test(message)) return "This MCP client sent an invalid redirect URI."
   if (/PKCE|code challenge/i.test(message)) return "This MCP client sent an invalid PKCE challenge."
   return "This MCP authorization request is invalid."
+}
+
+function isInvalidClientError(error: unknown) {
+  return error instanceof Error && /Invalid client/i.test(error.message)
+}
+
+async function registerTrustedCimdClient(oauthKv: KVNamespace, request: Request) {
+  const client = trustedChatGptCimdClient(request)
+  if (!client) return false
+
+  await oauthKv.put(`client:${client.clientId}`, JSON.stringify(client), {
+    expirationTtl: TRUSTED_CIMD_CLIENT_TTL_SECONDS,
+  })
+  return true
+}
+
+function trustedChatGptCimdClient(request: Request): ClientInfo | null {
+  const requestUrl = new URL(request.url)
+  const clientId = requestUrl.searchParams.get("client_id")?.trim()
+  const redirectUri = requestUrl.searchParams.get("redirect_uri")?.trim()
+  if (!clientId || !redirectUri) return null
+  if (requestUrl.searchParams.get("response_type") !== "code") return null
+  if (requestUrl.searchParams.get("code_challenge_method") !== "S256") return null
+  if (!requestUrl.searchParams.get("code_challenge")) return null
+
+  const clientIdUrl = safeUrl(clientId)
+  if (clientIdUrl?.origin !== "https://chatgpt.com") return null
+  if (clientIdUrl.username || clientIdUrl.password || clientIdUrl.port) return null
+  if (clientIdUrl.hash) return null
+
+  const match = /^\/oauth\/([A-Za-z0-9_-]{6,128})\/client\.json$/.exec(clientIdUrl.pathname)
+  if (!match) return null
+
+  for (const key of clientIdUrl.searchParams.keys()) {
+    if (key !== "token_endpoint_auth_method") return null
+  }
+  const tokenEndpointAuthMethods = clientIdUrl.searchParams.getAll("token_endpoint_auth_method")
+  if (tokenEndpointAuthMethods.length > 1) return null
+  if (tokenEndpointAuthMethods[0] && tokenEndpointAuthMethods[0] !== "none") return null
+
+  const redirectUrl = safeUrl(redirectUri)
+  if (redirectUrl?.origin !== "https://chatgpt.com") return null
+  if (redirectUrl.username || redirectUrl.password || redirectUrl.port) return null
+  if (redirectUrl.search || redirectUrl.hash) return null
+  if (redirectUrl.pathname !== `/connector/oauth/${match[1]}`) return null
+
+  return {
+    clientId,
+    clientName: "ChatGPT",
+    clientUri: "https://chatgpt.com",
+    grantTypes: ["authorization_code"],
+    redirectUris: [redirectUri],
+    registrationDate: Math.floor(Date.now() / 1000),
+    responseTypes: ["code"],
+    tokenEndpointAuthMethod: "none",
+  }
+}
+
+function safeUrl(value: string) {
+  try {
+    return new URL(value)
+  } catch {
+    return null
+  }
 }
 
 function normalizeHandoffId(value: unknown) {
