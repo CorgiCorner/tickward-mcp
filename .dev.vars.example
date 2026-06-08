@@ -1,0 +1,4 @@
+# Optional local override for `npm run dev`.
+# You can use either the app origin or the full versioned API base URL.
+TICKWARD_APP_BASE_URL=http://localhost:3000
+TICKWARD_API_BASE_URL=http://localhost:3000
