@@ -55,7 +55,7 @@ export default new OAuthProvider<Env>({
   apiHandler: McpApiHandler,
   apiRoute: "/mcp",
   authorizeEndpoint: "/authorize",
-  clientIdMetadataDocumentEnabled: true,
+  clientIdMetadataDocumentEnabled: false,
   clientRegistrationEndpoint: "/oauth/register",
   defaultHandler,
   refreshTokenTTL: 2_592_000,

@@ -33,8 +33,11 @@ const HANDOFF_TTL_SECONDS = 10 * 60
 const OAUTH_SCOPE_SET = new Set<string>(OAUTH_SCOPES)
 
 export async function startFirstPartyAuthorization(context: AuthorizeContext) {
-  const oauthRequest = await context.helpers.parseAuthRequest(context.request)
-  const client = await context.helpers.lookupClient(oauthRequest.clientId)
+  const oauthRequest = await parseAuthRequestOrError(context.helpers, context.request)
+  if (oauthRequest instanceof Response) return oauthRequest
+
+  const client = await lookupClientOrError(context.helpers, oauthRequest.clientId)
+  if (client instanceof Response) return client
   if (!client) {
     return htmlResponse(renderAuthorizeError("This MCP client is not registered."), { status: 400 })
   }
@@ -85,8 +88,11 @@ export async function completeFirstPartyAuthorization(context: AuthorizeContext)
   }
 
   const reconstructed = new Request(`${callbackUrl.origin}/authorize${stored.search}`, context.request)
-  const oauthRequest = await context.helpers.parseAuthRequest(reconstructed)
-  const client = await context.helpers.lookupClient(oauthRequest.clientId)
+  const oauthRequest = await parseAuthRequestOrError(context.helpers, reconstructed)
+  if (oauthRequest instanceof Response) return oauthRequest
+
+  const client = await lookupClientOrError(context.helpers, oauthRequest.clientId)
+  if (client instanceof Response) return client
   if (!client) {
     return htmlResponse(renderAuthorizeError("This MCP client is not registered."), { status: 400 })
   }
@@ -162,6 +168,32 @@ function requestedScopes(request: AuthRequest): OAuthScope[] {
 
 function isOAuthScope(value: unknown): value is OAuthScope {
   return typeof value === "string" && OAUTH_SCOPE_SET.has(value)
+}
+
+async function parseAuthRequestOrError(helpers: OAuthHelpers, request: Request) {
+  try {
+    return await helpers.parseAuthRequest(request)
+  } catch (error) {
+    return htmlResponse(renderAuthorizeError(authRequestErrorMessage(error)), { status: 400 })
+  }
+}
+
+async function lookupClientOrError(helpers: OAuthHelpers, clientId: string) {
+  try {
+    return await helpers.lookupClient(clientId)
+  } catch (error) {
+    return htmlResponse(renderAuthorizeError(authRequestErrorMessage(error)), { status: 400 })
+  }
+}
+
+function authRequestErrorMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : ""
+  if (/Invalid client/i.test(message)) {
+    return "This MCP client is not registered. Use Dynamic Client Registration in your MCP client settings."
+  }
+  if (/redirect URI/i.test(message)) return "This MCP client sent an invalid redirect URI."
+  if (/PKCE|code challenge/i.test(message)) return "This MCP client sent an invalid PKCE challenge."
+  return "This MCP authorization request is invalid."
 }
 
 function normalizeHandoffId(value: unknown) {

@@ -74,4 +74,24 @@ describe("OAuth props", () => {
       scopes: ["projects:read"],
     })
   })
+
+  it("returns a client error instead of throwing when OAuth client metadata fails", async () => {
+    const helpers = {
+      lookupClient: () => Promise.resolve(null),
+      parseAuthRequest: () =>
+        Promise.reject(new Error("Invalid client. The clientId provided does not match to this client.")),
+    } as never
+
+    const res = await startFirstPartyAuthorization({
+      config: { apiBaseUrl: "https://tickward.test/api/v1", appBaseUrl: "https://tickward.test" },
+      helpers,
+      oauthKv: {} as KVNamespace,
+      request: new Request(
+        "https://mcp.tickward.test/authorize?client_id=https%3A%2F%2Fchatgpt.com%2Foauth%2Fexample%2Fclient.json&scope=projects%3Aread&redirect_uri=https%3A%2F%2Fchatgpt.com%2Fconnector%2Foauth%2Fexample",
+      ),
+    })
+
+    await expect(res.text()).resolves.toContain("Use Dynamic Client Registration")
+    expect(res.status).toBe(400)
+  })
 })
