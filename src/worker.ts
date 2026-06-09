@@ -7,6 +7,7 @@ import { createTickwardApiClient } from "./api/client.js"
 import { MCP_SERVER_NAME, MCP_SERVER_VERSION, OAUTH_SCOPES } from "./constants.js"
 import { registerTickwardTools } from "./mcp/register-tools.js"
 import { parseOAuthProps, type TickwardOAuthProps } from "./oauth/authorization.js"
+import { withAgentAuthMetadata } from "./worker/agent-auth-metadata.js"
 import { defaultHandler } from "./worker/default-handler.js"
 
 type Env = {
@@ -49,7 +50,7 @@ class McpApiHandler extends WorkerEntrypoint<Env, TickwardOAuthProps> {
   }
 }
 
-export default new OAuthProvider<Env>({
+const oauthProvider = new OAuthProvider<Env>({
   accessTokenTTL: 3600,
   allowPlainPKCE: false,
   apiHandler: McpApiHandler,
@@ -63,3 +64,12 @@ export default new OAuthProvider<Env>({
   scopesSupported: [...OAUTH_SCOPES],
   tokenEndpoint: "/oauth/token",
 })
+
+// OAuthProvider owns the discovery documents; wrap it so the authorization
+// server metadata also carries the Auth.md agent_auth registration block.
+export default {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const response = await oauthProvider.fetch(request, env, ctx)
+    return withAgentAuthMetadata(request, env, response)
+  },
+}
