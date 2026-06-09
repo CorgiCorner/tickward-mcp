@@ -29,6 +29,7 @@ export const defaultHandler = {
           health: "/healthz",
           mcp: "/mcp",
           register: "/oauth/register",
+          serverCard: "/.well-known/mcp/server-card.json",
           token: "/oauth/token",
         },
         oauth: {
@@ -40,6 +41,21 @@ export const defaultHandler = {
 
     if (url.pathname === "/healthz" && request.method === "GET") {
       return jsonResponse({ ok: true, service: MCP_SERVER_NAME, version: MCP_SERVER_VERSION })
+    }
+
+    // MCP Server Card (SEP-1649) for agent discovery. The OAuth authorization
+    // server and protected-resource metadata are served by OAuthProvider.
+    if (url.pathname === "/.well-known/mcp/server-card.json" && request.method === "GET") {
+      const origin = new URL(request.url).origin
+      return jsonResponse({
+        serverInfo: { name: MCP_SERVER_NAME, version: MCP_SERVER_VERSION },
+        transport: { type: "streamable-http", endpoint: `${origin}/mcp` },
+        capabilities: { tools: {} },
+        authorization: {
+          type: "oauth2",
+          resource_metadata: `${origin}/.well-known/oauth-protected-resource`,
+        },
+      })
     }
 
     if (url.pathname === "/authorize" && request.method === "GET") {
