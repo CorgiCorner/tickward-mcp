@@ -4,6 +4,14 @@
 
 No unreleased public changes.
 
+## 0.0.3 - 2026-06-09
+
+### Added
+
+- Advertise an Auth.md `agent_auth` registration block in the OAuth
+  authorization server metadata, describing anonymous agent registration via
+  dynamic client registration and the `/authorize` claim flow.
+
 ## 0.0.2 - 2026-06-09
 
 ### Added
