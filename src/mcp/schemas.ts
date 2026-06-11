@@ -1,5 +1,19 @@
 import * as z from "zod/v4"
 
+export const webhookEventTypeInput = z.enum([
+  "project.created",
+  "project.updated",
+  "project.deleted",
+  "timer.created",
+  "timer.updated",
+  "timer.archived",
+  "timer.restored",
+  "timer.deleted",
+  "timer.ended",
+  "share.created",
+  "share.deleted",
+])
+
 const recurrenceInput = z
   .object({
     enabled: z.boolean(),

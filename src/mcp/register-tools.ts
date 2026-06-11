@@ -2,7 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import * as z from "zod/v4"
 
 import type { TickwardApiClient } from "../api/client.js"
-import { projectCreateInput, timerInput } from "./schemas.js"
+import { projectCreateInput, timerInput, webhookEventTypeInput } from "./schemas.js"
 
 export type RegisterTickwardToolsOptions = {
   apiClient: TickwardApiClient
@@ -169,6 +169,163 @@ export function registerTickwardTools(server: McpServer, options: RegisterTickwa
           idempotent: !idempotency_key,
           method: "DELETE",
         }),
+      ),
+  )
+
+  server.registerTool(
+    "tickward_list_webhooks",
+    {
+      description: "Use this to inspect webhook endpoints and event subscriptions for the signed-in account.",
+      inputSchema: {},
+      title: "List webhooks",
+    },
+    async () => jsonResult(await apiClient.request("/webhooks")),
+  )
+
+  server.registerTool(
+    "tickward_create_webhook",
+    {
+      description: "Create a webhook endpoint for event-driven automation. Use HTTPS URLs for production receivers.",
+      inputSchema: {
+        event_types: z.array(webhookEventTypeInput).min(1).optional(),
+        idempotency_key: z.string().optional(),
+        name: z.string(),
+        url: z.string().url(),
+      },
+      title: "Create webhook",
+    },
+    async ({ event_types, idempotency_key, name, url }) =>
+      jsonResult(
+        await apiClient.request("/webhooks", {
+          body: { event_types, name, url },
+          idempotencyKey: idempotency_key,
+          idempotent: !idempotency_key,
+          method: "POST",
+        }),
+      ),
+  )
+
+  server.registerTool(
+    "tickward_update_webhook_events",
+    {
+      description: "Update which tickward event types an existing webhook endpoint receives.",
+      inputSchema: {
+        event_types: z.array(webhookEventTypeInput).min(1),
+        idempotency_key: z.string().optional(),
+        webhook_id: z.string(),
+      },
+      title: "Update webhook events",
+    },
+    async ({ event_types, idempotency_key, webhook_id }) =>
+      jsonResult(
+        await apiClient.request(`/webhooks/${encodeURIComponent(webhook_id)}`, {
+          body: { event_types },
+          idempotencyKey: idempotency_key,
+          idempotent: !idempotency_key,
+          method: "PATCH",
+        }),
+      ),
+  )
+
+  server.registerTool(
+    "tickward_disable_webhook",
+    {
+      description: "Pause webhook deliveries while keeping the endpoint and delivery history.",
+      inputSchema: {
+        idempotency_key: z.string().optional(),
+        webhook_id: z.string(),
+      },
+      title: "Disable webhook",
+    },
+    async ({ idempotency_key, webhook_id }) =>
+      jsonResult(
+        await apiClient.request(`/webhooks/${encodeURIComponent(webhook_id)}`, {
+          body: { status: "disabled" },
+          idempotencyKey: idempotency_key,
+          idempotent: !idempotency_key,
+          method: "PATCH",
+        }),
+      ),
+  )
+
+  server.registerTool(
+    "tickward_reenable_webhook",
+    {
+      description: "Resume webhook deliveries for a disabled endpoint.",
+      inputSchema: {
+        idempotency_key: z.string().optional(),
+        webhook_id: z.string(),
+      },
+      title: "Enable webhook",
+    },
+    async ({ idempotency_key, webhook_id }) =>
+      jsonResult(
+        await apiClient.request(`/webhooks/${encodeURIComponent(webhook_id)}`, {
+          body: { status: "active" },
+          idempotencyKey: idempotency_key,
+          idempotent: !idempotency_key,
+          method: "PATCH",
+        }),
+      ),
+  )
+
+  server.registerTool(
+    "tickward_remove_webhook",
+    {
+      description: "Remove a webhook endpoint and its delivery history after explicit user confirmation.",
+      inputSchema: {
+        idempotency_key: z.string().optional(),
+        webhook_id: z.string(),
+      },
+      title: "Remove webhook",
+    },
+    async ({ idempotency_key, webhook_id }) =>
+      jsonResult(
+        await apiClient.request(`/webhooks/${encodeURIComponent(webhook_id)}`, {
+          idempotencyKey: idempotency_key,
+          idempotent: !idempotency_key,
+          method: "DELETE",
+        }),
+      ),
+  )
+
+  server.registerTool(
+    "tickward_send_test_webhook",
+    {
+      description: "Send a sample webhook delivery to verify a receiver endpoint.",
+      inputSchema: {
+        event_type: webhookEventTypeInput.optional(),
+        idempotency_key: z.string().optional(),
+        webhook_id: z.string(),
+      },
+      title: "Send test webhook",
+    },
+    async ({ event_type, idempotency_key, webhook_id }) =>
+      jsonResult(
+        await apiClient.request(`/webhooks/${encodeURIComponent(webhook_id)}/test`, {
+          body: event_type ? { event_type } : {},
+          idempotencyKey: idempotency_key,
+          idempotent: !idempotency_key,
+          method: "POST",
+        }),
+      ),
+  )
+
+  server.registerTool(
+    "tickward_list_webhook_deliveries",
+    {
+      description: "Inspect recent webhook delivery attempts for debugging integrations.",
+      inputSchema: {
+        limit: z.number().int().min(1).max(100).optional(),
+        webhook_id: z.string(),
+      },
+      title: "List webhook deliveries",
+    },
+    async ({ limit, webhook_id }) =>
+      jsonResult(
+        await apiClient.request(
+          `/webhooks/${encodeURIComponent(webhook_id)}/deliveries${limit ? `?limit=${limit}` : ""}`,
+        ),
       ),
   )
 

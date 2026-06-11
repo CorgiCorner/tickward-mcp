@@ -5,7 +5,8 @@ OAuth MCP server for the tickward public API.
 The server is intentionally a thin edge adapter. It does not connect to the
 tickward database and does not implement business logic. Tools call the
 versioned REST API under `/api/v1` after the user completes the tickward account
-consent flow.
+consent flow. Tools cover projects, timers, spaces, share links, and webhook
+management.
 
 ## Remote Worker
 

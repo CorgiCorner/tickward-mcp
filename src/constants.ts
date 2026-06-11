@@ -12,8 +12,16 @@ export const OAUTH_SCOPES = [
   "spaces:write",
   "shares:read",
   "shares:write",
+  "webhooks:read",
+  "webhooks:write",
 ] as const
 
 export type OAuthScope = (typeof OAUTH_SCOPES)[number]
 
-export const DEFAULT_OAUTH_SCOPES: OAuthScope[] = ["projects:read", "timers:read", "spaces:read", "shares:read"]
+export const DEFAULT_OAUTH_SCOPES: OAuthScope[] = [
+  "projects:read",
+  "timers:read",
+  "spaces:read",
+  "shares:read",
+  "webhooks:read",
+]
