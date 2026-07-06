@@ -1,0 +1,46 @@
+{
+  "name": "@tickward/mcp",
+  "version": "0.0.2",
+  "private": true,
+  "description": "OAuth MCP server for the tickward public API.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "files": [
+    "dist",
+    "CHANGELOG.md",
+    "LICENSE",
+    "README.md",
+    "wrangler.jsonc"
+  ],
+  "engines": {
+    "node": ">=22 <23"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "check": "npm run check:node && npm run format:check && npm run typecheck && npm run test && npm run worker:dry-run",
+    "check:node": "node scripts/check-node-version.mjs",
+    "dev": "wrangler dev --local --port 8787",
+    "format": "biome check --write .",
+    "format:check": "biome check .",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "worker:deploy": "wrangler deploy",
+    "worker:dry-run": "wrangler deploy --dry-run --outdir /tmp/tickward-mcp-worker",
+    "worker:prepare-production-config": "node scripts/prepare-production-config.mjs",
+    "worker:types": "wrangler types src/worker-configuration.d.ts"
+  },
+  "dependencies": {
+    "@cloudflare/workers-oauth-provider": "0.7.2",
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "agents": "0.14.5",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.16",
+    "@cloudflare/workers-types": "4.20260608.1",
+    "@types/node": "^22.18.11",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.7",
+    "wrangler": "4.98.0"
+  }
+}
