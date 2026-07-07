@@ -83,7 +83,7 @@ describe("api client", () => {
 
     await expect(client.listProjects()).rejects.toMatchObject({
       body: { error: { message: "Too many requests.", type: "rate_limited" } },
-      message: "Tickward API rate limit reached. Too many requests. Retry after 42s.",
+      message: "tickward API rate limit reached. Too many requests. Retry after 42s.",
       name: "TickwardApiError",
       status: 429,
     } satisfies Partial<TickwardApiError>)
@@ -98,7 +98,7 @@ describe("api client", () => {
 
     await expect(client.listProjects()).rejects.toMatchObject({
       body: null,
-      message: "Tickward API rate limit reached. Retry later.",
+      message: "tickward API rate limit reached. Retry later.",
       name: "TickwardApiError",
       status: 429,
     } satisfies Partial<TickwardApiError>)

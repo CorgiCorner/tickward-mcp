@@ -164,8 +164,8 @@ function publicRateLimitErrorMessage(data: unknown, retryAfterHeader?: string | 
   const retryMessage = retryAfterSeconds === undefined ? "Retry later." : `Retry after ${retryAfterSeconds}s.`
 
   return errorMessage
-    ? `Tickward API rate limit reached. ${errorMessage} ${retryMessage}`
-    : `Tickward API rate limit reached. ${retryMessage}`
+    ? `tickward API rate limit reached. ${errorMessage} ${retryMessage}`
+    : `tickward API rate limit reached. ${retryMessage}`
 }
 
 function parseRetryAfterSeconds(value?: string | null) {
