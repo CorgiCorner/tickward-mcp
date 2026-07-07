@@ -83,7 +83,10 @@ export function createTickwardApiClient(options: TickwardApiClientOptions) {
     const data: unknown = text ? JSON.parse(text) : null
 
     if (!response.ok) {
-      throw new TickwardApiError(publicApiErrorMessage(data, response.status), { body: data, status: response.status })
+      throw new TickwardApiError(publicApiErrorMessage(data, response.status, response.headers.get("Retry-After")), {
+        body: data,
+        status: response.status,
+      })
     }
 
     return data
@@ -127,7 +130,10 @@ export async function exchangeMcpAuthorizationGrant(options: {
   const data: unknown = text ? JSON.parse(text) : null
 
   if (!response.ok) {
-    throw new TickwardApiError(publicApiErrorMessage(data, response.status), { body: data, status: response.status })
+    throw new TickwardApiError(publicApiErrorMessage(data, response.status, response.headers.get("Retry-After")), {
+      body: data,
+      status: response.status,
+    })
   }
 
   return data as McpAuthorizationExchange
@@ -143,11 +149,39 @@ export function query(params: Record<string, string | number | boolean | null | 
   return text ? `?${text}` : ""
 }
 
-function publicApiErrorMessage(data: unknown, status: number) {
+function publicApiErrorMessage(data: unknown, status: number, retryAfterHeader?: string | null) {
+  if (status === 429) return publicRateLimitErrorMessage(data, retryAfterHeader)
+
+  const errorMessage = publicApiErrorBodyMessage(data)
+  if (errorMessage) return errorMessage
+
+  return `tickward API request failed with ${status}.`
+}
+
+function publicRateLimitErrorMessage(data: unknown, retryAfterHeader?: string | null) {
+  const retryAfterSeconds = parseRetryAfterSeconds(retryAfterHeader)
+  const errorMessage = publicApiErrorBodyMessage(data)
+  const retryMessage = retryAfterSeconds === undefined ? "Retry later." : `Retry after ${retryAfterSeconds}s.`
+
+  return errorMessage
+    ? `Tickward API rate limit reached. ${errorMessage} ${retryMessage}`
+    : `Tickward API rate limit reached. ${retryMessage}`
+}
+
+function parseRetryAfterSeconds(value?: string | null) {
+  if (!value) return undefined
+  const trimmed = value.trim()
+  if (!/^\d+$/.test(trimmed)) return undefined
+  const seconds = Number(trimmed)
+  if (!Number.isSafeInteger(seconds)) return undefined
+  return seconds
+}
+
+function publicApiErrorBodyMessage(data: unknown) {
   if (typeof data === "object" && data && "error" in data) {
     const error = (data as { error?: { message?: unknown } }).error
     if (typeof error?.message === "string" && error.message.trim()) return error.message
   }
 
-  return `tickward API request failed with ${status}.`
+  return undefined
 }
