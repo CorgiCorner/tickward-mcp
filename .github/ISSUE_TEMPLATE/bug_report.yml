@@ -1,0 +1,48 @@
+name: Bug report
+description: Report a reproducible problem with the Tickward MCP Worker
+title: "bug: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Do not include credentials or customer data. Report security issues
+        privately as described in SECURITY.md.
+  - type: input
+    id: version
+    attributes:
+      label: Worker version
+      description: The Tickward MCP release version where the problem occurs.
+    validations:
+      required: true
+  - type: input
+    id: runtime
+    attributes:
+      label: Client and runtime
+      description: MCP client, Node.js version, and operating system where relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Provide the smallest reproducible sequence with secrets removed.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Sanitized logs, screenshots, or related links.

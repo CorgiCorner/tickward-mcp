@@ -1,0 +1,4 @@
+title = "tickward MCP gitleaks configuration"
+
+[extend]
+useDefault = true
